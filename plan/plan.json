@@ -1,0 +1,61 @@
+{
+  "scope": {
+    "description": "Minimal URL shortener with REST API, redirects, click analytics, and QR PNG generation. SQLite persistence. Containerized.",
+    "features": [
+      "Create short URL from long URL (POST /api/shorten)",
+      "Redirect by short code (GET /{code}) increments click count and last_clicked",
+      "Get metadata (GET /api/{code})",
+      "Generate QR PNG (GET /qr/{code}.png)",
+      "Tiny HTML form at /",
+      "SQLite via SQLAlchemy; base62 6-char codes"
+    ],
+    "non_goals": [
+      "Auth, rate limiting, custom domains, admin UI, delete/update URLs"
+    ]
+  },
+  "architecture": {
+    "stack": ["Python 3.11", "FastAPI", "Uvicorn", "SQLite", "SQLAlchemy", "qrcode/Pillow"],
+    "port": 8000,
+    "data_model": {"URL": {"code": "pk", "long_url": "str", "clicks": "int", "last_clicked": "datetime", "created_at": "datetime"}},
+    "endpoints": ["POST /api/shorten", "GET /{code}", "GET /api/{code}", "GET /qr/{code}.png", "GET /"]
+  },
+  "dependencies": [
+    "fastapi", "uvicorn[standard]", "SQLAlchemy", "qrcode[pil]", "pytest", "httpx", "pytest-asyncio"
+  ],
+  "file_tree": {
+    "root": "./executions/2025-09-08_12-27-20/mvp",
+    "paths": [
+      "app/main.py", "app/models/db.py", "app/models/url.py", "app/utils/base62.py",
+      "tests/test_base62.py", "tests/test_integration.py",
+      "requirements.txt", "Dockerfile", "Makefile", "README.md", "LICENSE", "pytest.ini",
+      ".github/workflows/ci.yml", "plan/plan.json"
+    ]
+  },
+  "tests": {
+    "unit": ["test_generate_code_length_and_charset"],
+    "integration": ["test_create_redirect_and_qr"]
+  },
+  "build_run_validate": {
+    "build": [
+      "docker build -t urlshort:mvp ."
+    ],
+    "run": [
+      "docker run --rm -p 8000:8000 urlshort:mvp"
+    ],
+    "validate": [
+      "curl -s -X POST localhost:8000/api/shorten -H 'Content-Type: application/json' -d '{\"long_url\":\"https://example.com\"}'",
+      "Open GET /{code} from response; expect 307 redirect",
+      "GET /api/{code}; clicks should increment",
+      "GET /qr/{code}.png; content-type image/png"
+    ]
+  },
+  "risks": [
+    {"risk": "No host awareness for QR base URL in offline generation", "mitigation": "Use request.url_for to generate absolute URL dynamically"},
+    {"risk": "DB file persistence in container layer", "mitigation": "For MVP acceptable; in prod mount volume"},
+    {"risk": "Code collisions", "mitigation": "Retry on IntegrityError up to 5 times"}
+  ],
+  "blockers": [],
+  "ci": {
+    "workflow": ".github/workflows/ci.yml"
+  }
+}
